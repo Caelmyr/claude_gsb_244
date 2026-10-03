@@ -14,6 +14,7 @@ import uuid
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import config
+from .algorithms import util
 from .storage import JsonStore, atomic_write_bytes, now_iso
 
 
@@ -66,9 +67,10 @@ class ImageStore:
         # 1) 先落图像文件（原子）
         atomic_write_bytes(dest, data)
 
-        # 2) 读取尺寸/格式
+        # 2) 读取尺寸/格式（先按 EXIF 方向摆正，使记录尺寸与缩略图、
+        #    原图预览、所有处理结果的方向口径一致）
         try:
-            img = Image.open(io.BytesIO(data))
+            img = util.open_oriented(io.BytesIO(data))
             width, height = img.size
             fmt = (img.format or ext[1:].upper())
         except UnidentifiedImageError:
@@ -108,8 +110,7 @@ class ImageStore:
     def _make_thumbnail(self, image_id, data: bytes):
         """生成缩略图；失败不致命（保留空缩略图路径）。"""
         try:
-            img = Image.open(io.BytesIO(data))
-            img = ImageOps.exif_transpose(img).convert("RGB")
+            img = util.open_oriented(io.BytesIO(data)).convert("RGB")
             img.thumbnail((config.THUMB_DIM, config.THUMB_DIM), Image.Resampling.LANCZOS)
             tmp = self.thumbnail_path(image_id) + ".tmp"
             img.save(tmp, "JPEG", quality=82)
@@ -226,3 +227,34 @@ class ImageStore:
                 except OSError:
                     pass
         return removed
+
+    def migrate_orientation_meta(self):
+        """把存量记录的 width/height 修正为「按 EXIF 摆正后」的尺寸。
+
+        修复方向口径之前上传的带旋转信息照片，元数据记录的是原始像素
+        （横向）的宽高，与缩略图/原图预览显示方向不符。这里只改元数据，
+        缩略图本来就是按摆正后的方向生成的，无需重建。返回修正条数。
+        """
+        fixed = []
+
+        def _upd(doc):
+            doc = dict(doc)
+            for image_id, rec in list(doc.items()):
+                path = os.path.join(config.IMAGES_DIR, rec.get("stored_name", ""))
+                if not os.path.exists(path):
+                    continue
+                try:
+                    with util.open_oriented(path) as img:
+                        w, h = img.size
+                except Exception:  # noqa: BLE001 —— 无法识别的文件跳过
+                    continue
+                if rec.get("width") == w and rec.get("height") == h:
+                    continue
+                rec = dict(rec)
+                rec["width"], rec["height"] = w, h
+                doc[image_id] = rec
+                fixed.append(image_id)
+            return doc
+
+        self.meta.update(_upd)
+        return len(fixed)

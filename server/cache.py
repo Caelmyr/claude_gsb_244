@@ -20,10 +20,16 @@ from . import config
 from .storage import JsonStore, atomic_write_bytes, now_iso
 from .algorithms import util
 
+# 缓存「口径」版本：结果图像的生成语义变化时必须 +1，使旧结果全部不再命中。
+# v2：所有处理统一先按 EXIF Orientation 摆正（v1 会把带旋转信息的照片处理横）。
+CACHE_VERSION = "v2"
+
 
 def make_key(*parts):
-    """由若干字符串片段生成确定性缓存键。"""
+    """由若干字符串片段生成确定性缓存键（自动带当前缓存版本前缀）。"""
     h = hashlib.sha256()
+    h.update(CACHE_VERSION.encode("utf-8"))
+    h.update(b"\x00")
     for p in parts:
         h.update(str(p).encode("utf-8"))
         h.update(b"\x00")
@@ -33,6 +39,44 @@ def make_key(*parts):
 class ResultCache:
     def __init__(self):
         self.store = JsonStore(config.CACHE_JSON, {})
+        self.reset_on_version_change()
+
+    def reset_on_version_change(self):
+        """缓存口径版本变化时（如方向修复），清空全部旧结果。
+
+        旧结果是按未摆正的像素生成的，继续命中会让修复「看起来没生效」。
+        用独立的版本标记文件判定，避免改动缓存条目本身的结构。
+        """
+        try:
+            with open(config.CACHE_VERSION_FILE, "r", encoding="utf-8") as f:
+                saved = f.read().strip()
+        except OSError:
+            saved = None
+        if saved == CACHE_VERSION:
+            return
+        self._wipe()
+        try:
+            with open(config.CACHE_VERSION_FILE, "w", encoding="utf-8") as f:
+                f.write(CACHE_VERSION)
+        except OSError:
+            pass
+
+    def _wipe(self):
+        """删除所有结果文件并清空缓存索引（历史记录本身保留）。"""
+        for entry in self.store.read().values():
+            path = os.path.join(config.RESULTS_DIR, entry.get("file", ""))
+            try:
+                if os.path.exists(path):
+                    os.unlink(path)
+            except OSError:
+                pass
+        try:
+            for fn in os.listdir(config.RESULTS_DIR):
+                if fn.endswith(".tmp"):
+                    os.unlink(os.path.join(config.RESULTS_DIR, fn))
+        except OSError:
+            pass
+        self.store.write({})
 
     # ------------------------------------------------------------------ 读
     def get(self, key):

@@ -23,6 +23,7 @@ HISTORY_JSON = os.path.join(META_DIR, "history.json")
 PRESETS_JSON = os.path.join(META_DIR, "presets.json")
 QUEUE_JSON = os.path.join(META_DIR, "queue.json")
 CACHE_JSON = os.path.join(META_DIR, "cache.json")
+CACHE_VERSION_FILE = os.path.join(META_DIR, "cache_version.txt")
 
 # ---------------------------------------------------------------------------
 # 限制与默认值

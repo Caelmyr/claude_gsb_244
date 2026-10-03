@@ -49,14 +49,14 @@ def _image_view(rec):
 
 
 def _load_full_image(image_id):
+    """载入原图（已按 EXIF 方向摆正，方向口径与缩略图/原图预览一致）。"""
     rec = image_store.get(image_id)
     if not rec:
         return None, None
-    from PIL import Image
     path = image_store.file_path(image_id)
     if not path:
         return None, None
-    return rec, Image.open(path)
+    return rec, util.open_oriented(path)
 
 
 def _run_op(image_id, op_name, params, func):
@@ -645,6 +645,13 @@ def restore_history(history_id):
 def init_app(app):
     """在应用启动时注册蓝图并做一次性一致性检查。"""
     app.register_blueprint(bp)
+    # 存量记录尺寸迁移到「按 EXIF 摆正后」口径（新上传已直接按该口径记录）
+    try:
+        fixed = image_store.migrate_orientation_meta()
+        if fixed:
+            app.logger.info("已修正 %d 张图像的方向尺寸元数据", fixed)
+    except Exception as exc:  # noqa: BLE001 —— 迁移失败不应阻断启动
+        app.logger.warning("方向元数据迁移失败：%s", exc)
     issues = image_store.reconcile()
     if issues["orphan_files"] or issues["orphan_meta"]:
         app.logger.info("启动一致性检查发现孤儿：%s", issues)

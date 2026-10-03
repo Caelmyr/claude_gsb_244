@@ -12,8 +12,6 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image
-
 from . import config
 from . import pipeline as pipeline_engine
 from .algorithms import util
@@ -22,12 +20,15 @@ from .storage import JsonStore, now_iso
 
 
 def load_working_image(image_store, image_id):
-    """载入图像并降采样到工作分辨率（大图内存管理入口）。"""
+    """载入图像并降采样到工作分辨率（大图内存管理入口）。
+
+    先按 EXIF Orientation 摆正，与缩略图、原图预览的显示方向保持一致。
+    """
     rec = image_store.get(image_id)
     if not rec:
         raise FileNotFoundError(f"图像不存在：{image_id}")
     path = image_store.file_path(image_id)
-    img = Image.open(path)
+    img = util.open_oriented(path)
     img = util.ensure_rgb(img)
     return img, util.downscale_to_max(img, config.MAX_DIM), rec
 

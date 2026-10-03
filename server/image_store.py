@@ -69,7 +69,10 @@ class ImageStore:
         # 2) 读取尺寸/格式
         try:
             img = Image.open(io.BytesIO(data))
-            width, height = img.size
+            # 尺寸以「按 EXIF Orientation 摆正后」为准，与缩略图、浏览器原图
+            # 预览及所有处理结果的方向/宽高口径一致（竖拍图记录为竖图尺寸）。
+            oriented = ImageOps.exif_transpose(img)
+            width, height = oriented.size
             fmt = (img.format or ext[1:].upper())
         except UnidentifiedImageError:
             # 落盘失败清理，向上抛

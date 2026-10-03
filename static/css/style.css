@@ -21,6 +21,10 @@
 }
 
 * { box-sizing: border-box; }
+/* 所有 <img> 显式按原图自带的 EXIF Orientation 显示：列表缩略图、原图预览、
+   对比滑块、标注画布背景图口径统一（现代浏览器默认即 from-image，这里显式
+   声明以防个别环境/重置样式关掉）。处理结果本身已摆正像素且无方向标记。 */
+img { image-orientation: from-image; }
 html, body { height: 100%; margin: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",

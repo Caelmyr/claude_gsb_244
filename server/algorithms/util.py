@@ -15,6 +15,21 @@ from PIL import Image, ImageFilter, ImageOps
 from .. import config
 
 
+def apply_orientation(img: Image.Image) -> Image.Image:
+    """按图像自身携带的 EXIF Orientation 把像素摆正。
+
+    手机竖拍照片的像素通常是横存的，真正的朝向只记录在 EXIF Orientation 里
+    （1 正常 / 3 旋转180 / 6 顺时针90 / 8 逆时针90，外加 2/4/5/7 的镜像）。
+    浏览器显示原图、缩略图生成都会按该标记摆正，但 Pillow 直接处理时不会，
+    导致处理结果横躺。所有处理入口必须先经过本函数，保证「所见即所处理」。
+
+    ImageOps.exif_transpose 在旋转像素的同时会把 EXIF Orientation 重置为 1，
+    因此结果再次经过本函数（或被浏览器按 EXIF 显示）都不会被二次旋转；
+    不带方向信息（PNG、横拍照片）时原样返回。
+    """
+    return ImageOps.exif_transpose(img)
+
+
 # ---------------------------------------------------------------------------
 # 尺寸与降采样
 # ---------------------------------------------------------------------------

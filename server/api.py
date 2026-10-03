@@ -52,11 +52,13 @@ def _load_full_image(image_id):
     rec = image_store.get(image_id)
     if not rec:
         return None, None
-    from PIL import Image
     path = image_store.file_path(image_id)
     if not path:
         return None, None
-    return rec, Image.open(path)
+    # 关键：先按 EXIF Orientation 摆正再处理，否则手机竖拍图的处理结果会横躺。
+    # 单图运算（锐化/滤镜/风格/特征/检测/分割）、特征匹配、差异对比都走这里，
+    # 保证结果方向与缩略图、浏览器原图预览的口径完全一致。
+    return rec, util.apply_orientation(Image.open(path))
 
 
 def _run_op(image_id, op_name, params, func):

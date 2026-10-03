@@ -22,8 +22,14 @@ from .algorithms import util
 
 
 def make_key(*parts):
-    """由若干字符串片段生成确定性缓存键。"""
+    """由若干字符串片段生成确定性缓存键。
+
+    首段固定为缓存版本号：处理口径（本项目中是 EXIF 方向摆正）发生变化时
+    提升版本，旧结果（例如修复前缓存下来的横躺图）会因键不匹配而自然失效，
+    无需手动清空 data/results。
+    """
     h = hashlib.sha256()
+    h.update(b"cache-v2\x00")
     for p in parts:
         h.update(str(p).encode("utf-8"))
         h.update(b"\x00")

@@ -27,7 +27,9 @@ def load_working_image(image_store, image_id):
     if not rec:
         raise FileNotFoundError(f"图像不存在：{image_id}")
     path = image_store.file_path(image_id)
-    img = Image.open(path)
+    # 先按 EXIF Orientation 摆正：单图运行 / 滤镜链 / 批量处理共用此入口，
+    # 与缩略图、原图预览方向保持一致，竖拍图不会再横躺。
+    img = util.apply_orientation(Image.open(path))
     img = util.ensure_rgb(img)
     return img, util.downscale_to_max(img, config.MAX_DIM), rec
 
